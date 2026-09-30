@@ -52,7 +52,7 @@ def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
         income_tax = taxable_income * 0.23 - 63.6
     else:
         income_tax = taxable_income * 0.33 - 153.6
-    income_tax = max(10, income_tax)
+    income_tax = max(1.0, income_tax)
     
     # 住民税 (課税所得の約10%)
     resident_tax = taxable_income * 0.10 + 5.0
@@ -60,7 +60,7 @@ def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
     # 個人事業税 (所得210万円超、業種により約5%)
     biz_tax = max(0, (income - 210) * 0.05) if income > 210 else 0
     
-    # 健康保険税の判定（選択肢が確実に反映されるように修正）
+    # 健康保険税の判定
     if ins_sel == "建設国民健康保険組合（定額）":
         health_tax = 53.0
     else:
@@ -103,7 +103,7 @@ with col3:
 
 st.divider()
 
-# 詳細内訳比較テーブル
+# 詳細内訳比較テーブル（変数と完全に連動するように修正）
 st.subheader("📊 負担内訳の比較 (万円 / 年)")
 
 comparison_df = pd.DataFrame({
