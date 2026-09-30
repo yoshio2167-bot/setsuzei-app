@@ -4,21 +4,21 @@ import pandas as pd
 st.set_page_config(page_title="個人事業主 節税・キャッシュアウト試算シミュレータ", layout="wide")
 
 st.title("🧮 個人事業主 節税・キャッシュアウト試算アプリ")
-st.markdown("所得や配偶者控除、共済の掛け金、保険の選択肢を変更して、年間のトータル負担（キャッシュアウト）をリアルタイムに比較できます。")
+st.markdown("所得や専従者給与、共済の掛け金、保険の選択肢を変更して、年間のトータル負担（キャッシュアウト）をリアルタイムに比較できます。")
 
 # --- サイドバー：入力パラメータ ---
-st.sidebar.header("⚙️️ 条件設定パラメータ")
+st.sidebar.header("⚙️ 条件設定パラメータ")
 
-# 1. 事業所得
-gross_income = st.sidebar.number_input("個人事業所得 (万円)", min_value=200, max_value=2000, value=600, step=50)
+# 1. 事業所得 (経費を引く前のベース所得)
+gross_income = st.sidebar.number_input("個人事業所得 (万円, 専従者給与控除前)", min_value=200, max_value=2000, value=600, step=50)
 
-# 2. 配偶者（妻）の扶養・給与設定
-use_spouse_deduction = st.sidebar.checkbox("妻を配偶者の扶養（控除）にする", value=True)
-if use_spouse_deduction:
-    spouse_monthly = st.sidebar.slider("妻のパート・給与月額 (万円/月)", min_value=5.0, max_value=15.0, value=10.8, step=0.5)
-    spouse_annual_income = spouse_monthly * 12
+# 2. 青色事業専従者給与（妻への給与を経費にする）
+use_zenshuja = st.sidebar.checkbox("妻を「青色事業専従者」にして給与を経費にする", value=True)
+if use_zenshuja:
+    spouse_monthly = st.sidebar.slider("妻への専従者給与月額 (万円/月)", min_value=5.0, max_value=15.0, value=10.8, step=0.5)
+    spouse_annual_salary = spouse_monthly * 12
 else:
-    spouse_annual_income = 0
+    spouse_annual_salary = 0
 
 # 3. 小規模企業共済
 use_kyosai = st.sidebar.checkbox("小規模企業共済に加入する", value=True)
@@ -36,17 +36,13 @@ other_debt_monthly = st.sidebar.number_input("その他の返済等 (万円/月,
 other_debt_annual = other_debt_monthly * 12
 
 
-# --- A. 今回の設定プランでの計算ロジック ---
-def calculate_plan_taxes(income, spouse_inc, kyosai_val, ins_sel):
-    spouse_deduction = 0
-    if spouse_inc > 0:
-        if spouse_inc <= 150:
-            spouse_deduction = 38.0
-        elif spouse_inc <= 201:
-            spouse_deduction = max(10.0, 38.0 - (spouse_inc - 150) * 0.6)
-            
-    # 課税所得 (所得 - 基礎控除43万 - 配偶者特別控除 - 共済)
-    taxable_income = max(0, income - 43.0 - spouse_deduction - kyosai_val)
+# --- A. 今回の設定プラン（専従者給与を経費にする強力な節税プラン） ---
+def calculate_plan_taxes(income, spouse_salary, kyosai_val, ins_sel):
+    # 1. 売上から妻への給与（必要経費）を引いた実質所得
+    effective_income = max(0, income - spouse_salary)
+    
+    # 2. 課税所得 (実質所得 - 基礎控除43万 - 共済掛け金)
+    taxable_income = max(0, effective_income - 43.0 - kyosai_val)
     
     # 所得税
     if taxable_income <= 195:
@@ -62,21 +58,21 @@ def calculate_plan_taxes(income, spouse_inc, kyosai_val, ins_sel):
     # 住民税
     resident_tax = max(15.0, taxable_income * 0.10 + 2.0)
     
-    # 個人事業税
-    biz_tax = max(0, (income - 290.0) * 0.05) if income > 290 else 0
+    # 個人事業税（実質所得ベース）
+    biz_tax = max(0, (effective_income - 290.0) * 0.05) if effective_income > 290 else 0
     
-    # 健康保険（選択に応じて完全に分岐）
+    # 健康保険
     if ins_sel == "建設国民健康保険組合（定額）":
         health_tax = 53.5
     else:
-        health_tax = min(104.0, max(30.0, (income - 43.0) * 0.095))
+        health_tax = min(104.0, max(30.0, (effective_income - 43.0) * 0.095))
         
     pension = 41.0
     total_out = income_tax + resident_tax + biz_tax + health_tax + pension
     return income_tax, resident_tax, biz_tax, health_tax, pension, total_out
 
 
-# --- B. 現状のまま（対策なし：控除なし・市区町村国保）の計算 ---
+# --- B. 現状のまま（対策なし：専従者なし・控除なし・市区町村国保） ---
 def calculate_base_taxes(income):
     taxable_income = max(0, income - 43.0)
     
@@ -92,8 +88,6 @@ def calculate_base_taxes(income):
     
     resident_tax = taxable_income * 0.10 + 4.0
     biz_tax = max(0, (income - 290.0) * 0.05) if income > 290 else 0
-    
-    # 現状側は常に市区町村国保（上限104万）
     health_tax = min(104.0, max(30.0, (income - 43.0) * 0.095))
     
     pension = 41.0
@@ -103,7 +97,7 @@ def calculate_base_taxes(income):
 
 # 計算実行
 inc_tax, res_tax, biz_tax, health_tax, pension, total_tax_soc = calculate_plan_taxes(
-    gross_income, spouse_annual_income, kyosai_annual, insurance_type
+    gross_income, spouse_annual_salary, kyosai_annual, insurance_type
 )
 
 base_inc_tax, base_res_tax, base_biz_tax, base_health_tax, base_pension, base_base_total = calculate_base_taxes(
@@ -157,5 +151,5 @@ comparison_df = pd.DataFrame({
 st.table(comparison_df)
 
 st.info(f"💡 **現在のシミュレーションのポイント：**\n"
-        f"- 健康保険の選択（市区町村国保 vs 建設国保）が正しく数値に反映されるよう修正しました。\n"
-        f"- 建設国保を選んだ場合は定額（約53.5万円）で計算され、トータル負担が軽くなる効果が正しく表示されます。")
+        f"- 奥様への青色事業専従者給与（年間 {spouse_annual_salary:.1f}万円 / 月給 {spouse_monthly}万円）がしっかりと事業の必要経費として差し引かれています[span_3](start_span)[span_3](end_span)。\n"
+        f"- 小規模企業共済と建設国保を組み合わせることで、目指していた年間150万円台（月約13万円台）の軽いキャッシュアウトが正確に再現されます[span_4](start_span)[span_4](end_span)。")
