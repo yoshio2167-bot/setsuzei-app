@@ -4,7 +4,7 @@ import pandas as pd
 st.set_page_config(page_title="個人事業主 節税・キャッシュアウト試算シミュレータ", layout="wide")
 
 st.title("🧮 個人事業主 節税・キャッシュアウト試算アプリ")
-st.markdown("所得や専従者給与、共済の掛け金、保険の選択肢を変更して、年間のトータル負担（キャッシュアウト）をリアルタイムに比較できます。")
+st.markdown("所得や配偶者控除、共済の掛け金、保険の選択肢を変更して、年間のトータル負担（キャッシュアウト）をリアルタイムに比較できます。")
 
 # --- サイドバー：入力パラメータ ---
 st.sidebar.header("⚙️ 条件設定パラメータ")
@@ -12,13 +12,14 @@ st.sidebar.header("⚙️ 条件設定パラメータ")
 # 1. 事業所得
 gross_income = st.sidebar.number_input("個人事業所得 (万円)", min_value=200, max_value=2000, value=600, step=50)
 
-# 2. 専従者給与
-use_deputy = st.sidebar.checkbox("青色事業専従者（妻）を導入する", value=True)
-if use_deputy:
-    deputy_monthly = st.sidebar.slider("妻への月額給与 (万円/月)", min_value=5, max_value=15, value=11, step=1)
-    deputy_annual = deputy_monthly * 12
+# 2. 配偶者（妻）の働き方・扶養設定
+use_spouse_deduction = st.sidebar.checkbox("妻を配偶者の扶養（控除）にする", value=True)
+if use_spouse_deduction:
+    # 月額10.8万円（年間129.6万円）に固定、またはスライダーで調整可能
+    spouse_monthly = st.sidebar.slider("妻へのパート・給与月額 (万円/月)", min_value=5.0, max_value=15.0, value=10.8, step=0.5)
+    spouse_annual_income = spouse_monthly * 12
 else:
-    deputy_annual = 0
+    spouse_annual_income = 0
 
 # 3. 小規模企業共済
 use_kyosai = st.sidebar.checkbox("小規模企業共済に加入する", value=True)
@@ -36,10 +37,20 @@ other_debt_monthly = st.sidebar.number_input("その他の返済等 (万円/月,
 other_debt_annual = other_debt_monthly * 12
 
 
-# --- 計算ロジック（より実態の目安に合わせた調整版） ---
-def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
-    # 控除後の課税所得 (基礎控除43万 + 専従者給与 + 共済)
-    taxable_income = max(0, income - 43 - dep_val - kyosai_val)
+# --- 計算ロジック（配偶者控除・配偶者特別控除の適用） ---
+def calculate_taxes(income, spouse_inc, kyosai_val, ins_sel):
+    # 配偶者控除または配偶者特別控除の金額を算出（夫の所得600万、妻の収入に応じた目安）
+    # ※妻の収入が約130万円未満（月10.8万×12=129.6万）の場合、配偶者特別控除（約30万〜38万円控除）が適用されます
+    spouse_deduction = 0
+    if spouse_inc > 0:
+        if spouse_inc <= 150: # 年収150万円以下なら満額に近い控除（約38万円）
+            spouse_deduction = 38.0
+        elif spouse_inc <= 201:
+            spouse_deduction = max(10.0, 38.0 - (spouse_inc - 150) * 0.6)
+            
+    # 控除後の課税所得 (基礎控除43万 + 配偶者控除等 + 共済)
+    # ※妻の給与は事業経費ではなく、世帯内の給与収入として扱われます
+    taxable_income = max(0, income - 43 - spouse_deduction - kyosai_val)
     
     # 所得税
     if taxable_income <= 195:
@@ -52,10 +63,10 @@ def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
         income_tax = taxable_income * 0.23 - 63.6
     income_tax = max(1.0, income_tax)
     
-    # 住民税（実態に合わせた標準的な算出）
+    # 住民税
     resident_tax = taxable_income * 0.10 + 2.0
     
-    # 個人事業税（事業主控除290万円を適用した実勢値）
+    # 個人事業税（事業主控除290万円を適用）
     biz_tax = max(0, (income - 290) * 0.05) if income > 290 else 0
     
     # 健康保険税の判定
@@ -64,16 +75,16 @@ def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
     else:
         health_tax = min(104, max(30, (income - 43) * 0.095))
         
-    # 国民年金 (標準的な年間負担)
+    # 国民年金 (夫婦2人分固定)
     pension = 41.0
     
     total_out = income_tax + resident_tax + biz_tax + health_tax + pension
     return income_tax, resident_tax, biz_tax, health_tax, pension, total_out
 
 # 選択された条件での計算
-inc_tax, res_tax, biz_tax, health_tax, pension, total_tax_soc = calculate_taxes(gross_income, deputy_annual, kyosai_annual, insurance_type)
+inc_tax, res_tax, biz_tax, health_tax, pension, total_tax_soc = calculate_taxes(gross_income, spouse_annual_income, kyosai_annual, insurance_type)
 
-# 比較用の「現状ベース（対策なし・市区町村国保・専従者なし・共済なし）」の計算
+# 比較用の「現状ベース（対策なし・配偶者控除なし・市区町村国保・共済なし）」の計算
 base_inc_tax, base_res_tax, base_biz_tax, base_health_tax, base_pension, base_base_total = calculate_taxes(gross_income, 0, 0, "市区町村の国民健康保険")
 
 # --- 画面表示 ---
@@ -123,6 +134,6 @@ comparison_df = pd.DataFrame({
 st.table(comparison_df)
 
 st.info(f"💡 **現在のシミュレーションのポイント：**\n"
-        f"- ご主人の所得 **{gross_income}万円** に対し、専従者給与（年間 **{deputy_annual}万円**）と小規模企業共済（年間 **{kyosai_annual}万円**）の合計 **{deputy_annual + kyosai_annual}万円** が所得から控除されています。\n"
-        f"- 健康保険に **{insurance_type}** を選択しているため、保険料が正確に反映されています。\n"
-        f"- 返済を含めたトータルの資金繰りもリアルタイムで確認できます。")
+        f"- 奥様を扶養（配偶者特別控除の対象）にしつつ、パート・給与収入を **月額 {spouse_monthly}万円**（年間 {spouse_annual_income:.1f}万円）に設定しています。\n"
+        f"- 小規模企業共済（年間 **{kyosai_annual}万円**）と組み合わせることで、配偶者控除とダブルで所得から控除されます。\n"
+        f"- 健康保険に **{insurance_type}** を選択した状態でのトータル負担を確認できます。")
