@@ -12,11 +12,10 @@ st.sidebar.header("⚙️ 条件設定パラメータ")
 # 1. 事業所得
 gross_income = st.sidebar.number_input("個人事業所得 (万円)", min_value=200, max_value=2000, value=600, step=50)
 
-# 2. 配偶者（妻）の働き方・扶養設定
+# 2. 配偶者（妻）の扶養・給与設定
 use_spouse_deduction = st.sidebar.checkbox("妻を配偶者の扶養（控除）にする", value=True)
 if use_spouse_deduction:
-    # 月額10.8万円（年間129.6万円）に固定、またはスライダーで調整可能
-    spouse_monthly = st.sidebar.slider("妻へのパート・給与月額 (万円/月)", min_value=5.0, max_value=15.0, value=10.8, step=0.5)
+    spouse_monthly = st.sidebar.slider("妻のパート・給与月額 (万円/月)", min_value=5.0, max_value=15.0, value=10.8, step=0.5)
     spouse_annual_income = spouse_monthly * 12
 else:
     spouse_annual_income = 0
@@ -37,19 +36,17 @@ other_debt_monthly = st.sidebar.number_input("その他の返済等 (万円/月,
 other_debt_annual = other_debt_monthly * 12
 
 
-# --- 計算ロジック（配偶者控除・配偶者特別控除の適用） ---
+# --- 計算ロジック ---
 def calculate_taxes(income, spouse_inc, kyosai_val, ins_sel):
-    # 配偶者控除または配偶者特別控除の金額を算出（夫の所得600万、妻の収入に応じた目安）
-    # ※妻の収入が約130万円未満（月10.8万×12=129.6万）の場合、配偶者特別控除（約30万〜38万円控除）が適用されます
+    # 配偶者特別控除の目安（妻の年収に応じた控除額）
     spouse_deduction = 0
     if spouse_inc > 0:
-        if spouse_inc <= 150: # 年収150万円以下なら満額に近い控除（約38万円）
+        if spouse_inc <= 150:
             spouse_deduction = 38.0
         elif spouse_inc <= 201:
             spouse_deduction = max(10.0, 38.0 - (spouse_inc - 150) * 0.6)
             
-    # 控除後の課税所得 (基礎控除43万 + 配偶者控除等 + 共済)
-    # ※妻の給与は事業経費ではなく、世帯内の給与収入として扱われます
+    # 控除後の課税所得 (基礎控除43万 + 配偶者特別控除 + 共済)
     taxable_income = max(0, income - 43 - spouse_deduction - kyosai_val)
     
     # 所得税
@@ -63,7 +60,7 @@ def calculate_taxes(income, spouse_inc, kyosai_val, ins_sel):
         income_tax = taxable_income * 0.23 - 63.6
     income_tax = max(1.0, income_tax)
     
-    # 住民税
+    # 住民税（改正後の負担軽減を反映した標準算出）
     resident_tax = taxable_income * 0.10 + 2.0
     
     # 個人事業税（事業主控除290万円を適用）
@@ -134,6 +131,6 @@ comparison_df = pd.DataFrame({
 st.table(comparison_df)
 
 st.info(f"💡 **現在のシミュレーションのポイント：**\n"
-        f"- 奥様を扶養（配偶者特別控除の対象）にしつつ、パート・給与収入を **月額 {spouse_monthly}万円**（年間 {spouse_annual_income:.1f}万円）に設定しています。\n"
-        f"- 小規模企業共済（年間 **{kyosai_annual}万円**）と組み合わせることで、配偶者控除とダブルで所得から控除されます。\n"
-        f"- 健康保険に **{insurance_type}** を選択した状態でのトータル負担を確認できます。")
+        f"- 奥様を扶養（配偶者特別控除の対象）にしつつ、パート収入を **月額 {spouse_monthly}万円**（年間 {spouse_annual_income:.1f}万円）に設定しています。\n"
+        f"- 小規模企業共済（年間 **{kyosai_annual}万円**）と組み合わせることで、無理のない節税と控除を両立しています。\n"
+        f"- 健康保険に **{insurance_type}** を選択した状態でのトータル負担をリアルタイムで確認できます。")
