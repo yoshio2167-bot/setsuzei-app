@@ -7,7 +7,7 @@ st.title("🧮 個人事業主 節税・キャッシュアウト試算アプリ"
 st.markdown("所得や配偶者控除、共済の掛け金、保険の選択肢を変更して、年間のトータル負担（キャッシュアウト）をリアルタイムに比較できます。")
 
 # --- サイドバー：入力パラメータ ---
-st.sidebar.header("⚙️ 条件設定パラメータ")
+st.sidebar.header("⚙️️ 条件設定パラメータ")
 
 # 1. 事業所得
 gross_income = st.sidebar.number_input("個人事業所得 (万円)", min_value=200, max_value=2000, value=600, step=50)
@@ -36,9 +36,9 @@ other_debt_monthly = st.sidebar.number_input("その他の返済等 (万円/月,
 other_debt_annual = other_debt_monthly * 12
 
 
-# --- 計算ロジック ---
+# --- 計算ロジック関数 ---
 def calculate_taxes(income, spouse_inc, kyosai_val, ins_sel):
-    # 配偶者特別控除の目安（妻の年収に応じた控除額）
+    # 配偶者特別控除の目安
     spouse_deduction = 0
     if spouse_inc > 0:
         if spouse_inc <= 150:
@@ -46,7 +46,7 @@ def calculate_taxes(income, spouse_inc, kyosai_val, ins_sel):
         elif spouse_inc <= 201:
             spouse_deduction = max(10.0, 38.0 - (spouse_inc - 150) * 0.6)
             
-    # 控除後の課税所得 (基礎控除43万 + 配偶者特別控除 + 共済)
+    # 課税所得 (基礎控除43万 + 配偶者特別控除 + 共済)
     taxable_income = max(0, income - 43 - spouse_deduction - kyosai_val)
     
     # 所得税
@@ -60,29 +60,34 @@ def calculate_taxes(income, spouse_inc, kyosai_val, ins_sel):
         income_tax = taxable_income * 0.23 - 63.6
     income_tax = max(1.0, income_tax)
     
-    # 住民税（改正後の負担軽減を反映した標準算出）
+    # 住民税
     resident_tax = taxable_income * 0.10 + 2.0
     
     # 個人事業税（事業主控除290万円を適用）
     biz_tax = max(0, (income - 290) * 0.05) if income > 290 else 0
     
-    # 健康保険税の判定
+    # 健康保険税
     if ins_sel == "建設国民健康保険組合（定額）":
         health_tax = 53.0
     else:
         health_tax = min(104, max(30, (income - 43) * 0.095))
         
-    # 国民年金 (夫婦2人分固定)
+    # 国民年金
     pension = 41.0
     
     total_out = income_tax + resident_tax + biz_tax + health_tax + pension
     return income_tax, resident_tax, biz_tax, health_tax, pension, total_out
 
-# 選択された条件での計算
-inc_tax, res_tax, biz_tax, health_tax, pension, total_tax_soc = calculate_taxes(gross_income, spouse_annual_income, kyosai_annual, insurance_type)
 
-# 比較用の「現状ベース（対策なし・配偶者控除なし・市区町村国保・共済なし）」の計算
-base_inc_tax, base_res_tax, base_biz_tax, base_health_tax, base_pension, base_base_total = calculate_taxes(gross_income, 0, 0, "市区町村の国民健康保険")
+# A. 今回の設定プランでの計算
+inc_tax, res_tax, biz_tax, health_tax, pension, total_tax_soc = calculate_taxes(
+    gross_income, spouse_annual_income, kyosai_annual, insurance_type
+)
+
+# B. 現状のまま（対策なし：控除なし、市区町村国保）の計算
+base_inc_tax, base_res_tax, base_biz_tax, base_health_tax, base_pension, base_base_total = calculate_taxes(
+    gross_income, 0, 0, "市区町村の国民健康保険"
+)
 
 # --- 画面表示 ---
 col1, col2, col3 = st.columns(3)
