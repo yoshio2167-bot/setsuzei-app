@@ -36,12 +36,12 @@ other_debt_monthly = st.sidebar.number_input("その他の返済等 (万円/月,
 other_debt_annual = other_debt_monthly * 12
 
 
-# --- 計算ロジック ---
+# --- 計算ロジック（実勢値に合わせた調整） ---
 def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
     # 控除後の課税所得 (基礎控除43万 + 専従者給与 + 共済)
     taxable_income = max(0, income - 43 - dep_val - kyosai_val)
     
-    # 簡易所得税計算 (累進課税の目安)
+    # 所得税
     if taxable_income <= 195:
         income_tax = taxable_income * 0.05
     elif taxable_income <= 330:
@@ -54,11 +54,19 @@ def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
         income_tax = taxable_income * 0.33 - 153.6
     income_tax = max(1.0, income_tax)
     
-    # 住民税 (課税所得の約10%)
-    resident_tax = taxable_income * 0.10 + 5.0
+    # 住民税（夫の分 ＋ 専従者給与がある場合は妻側の住民税の目安も合算）
+    # 夫の住民税
+    husband_res_tax = taxable_income * 0.10 + 4.0
+    # 妻の住民税（専従者給与から基礎控除等を引いた分の目安）
+    if dep_val > 0:
+        wife_taxable = max(0, dep_val - 43 - 55) # 給与所得控除55万・基礎控除43万の簡易試算
+        wife_res_tax = wife_taxable * 0.10 + 1.0
+    else:
+        wife_res_tax = 0.0
+    resident_tax = husband_res_tax + wife_res_tax
     
-    # 個人事業税 (所得210万円超、業種により約5%)
-    biz_tax = max(0, (income - 210) * 0.05) if income > 210 else 0
+    # 個人事業税（事業主控除290万円を適用）
+    biz_tax = max(0, (income - 290) * 0.05) if income > 290 else 0
     
     # 健康保険税の判定
     if ins_sel == "建設国民健康保険組合（定額）":
@@ -103,7 +111,7 @@ with col3:
 
 st.divider()
 
-# 詳細内訳比較テーブル（変数と完全に連動するように修正）
+# 詳細内訳比較テーブル
 st.subheader("📊 負担内訳の比較 (万円 / 年)")
 
 comparison_df = pd.DataFrame({
