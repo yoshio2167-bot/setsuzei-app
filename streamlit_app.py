@@ -36,7 +36,7 @@ other_debt_monthly = st.sidebar.number_input("その他の返済等 (万円/月,
 other_debt_annual = other_debt_monthly * 12
 
 
-# --- 計算ロジック（実勢値に合わせた調整） ---
+# --- 計算ロジック（より実態の目安に合わせた調整版） ---
 def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
     # 控除後の課税所得 (基礎控除43万 + 専従者給与 + 共済)
     taxable_income = max(0, income - 43 - dep_val - kyosai_val)
@@ -48,24 +48,14 @@ def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
         income_tax = taxable_income * 0.10 - 9.75
     elif taxable_income <= 695:
         income_tax = taxable_income * 0.20 - 42.75
-    elif taxable_income <= 900:
-        income_tax = taxable_income * 0.23 - 63.6
     else:
-        income_tax = taxable_income * 0.33 - 153.6
+        income_tax = taxable_income * 0.23 - 63.6
     income_tax = max(1.0, income_tax)
     
-    # 住民税（夫の分 ＋ 専従者給与がある場合は妻側の住民税の目安も合算）
-    # 夫の住民税
-    husband_res_tax = taxable_income * 0.10 + 4.0
-    # 妻の住民税（専従者給与から基礎控除等を引いた分の目安）
-    if dep_val > 0:
-        wife_taxable = max(0, dep_val - 43 - 55) # 給与所得控除55万・基礎控除43万の簡易試算
-        wife_res_tax = wife_taxable * 0.10 + 1.0
-    else:
-        wife_res_tax = 0.0
-    resident_tax = husband_res_tax + wife_res_tax
+    # 住民税（実態に合わせた標準的な算出）
+    resident_tax = taxable_income * 0.10 + 2.0
     
-    # 個人事業税（事業主控除290万円を適用）
+    # 個人事業税（事業主控除290万円を適用した実勢値）
     biz_tax = max(0, (income - 290) * 0.05) if income > 290 else 0
     
     # 健康保険税の判定
@@ -74,7 +64,7 @@ def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
     else:
         health_tax = min(104, max(30, (income - 43) * 0.095))
         
-    # 国民年金 (夫婦2人分固定)
+    # 国民年金 (標準的な年間負担)
     pension = 41.0
     
     total_out = income_tax + resident_tax + biz_tax + health_tax + pension
