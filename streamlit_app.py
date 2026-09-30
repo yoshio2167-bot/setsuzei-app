@@ -32,7 +32,7 @@ else:
 insurance_type = st.sidebar.radio("健康保険の選択", ["市区町村の国民健康保険", "建設国民健康保険組合（定額）"])
 
 # 5. その他の固定費（返済など）
-other_debt_monthly = st.sidebar.number_input("その他の返済等 (万円/月, 例: 10万×15ヶ月)", min_value=0, max_value=50, value=10, step=5)
+other_debt_monthly = st.sidebar.number_input("その他の返済等 (万円/月, 例: 10万×15ヶ月)", min_value=0, max_value=50, value=0, step=5)
 other_debt_annual = other_debt_monthly * 12
 
 
@@ -60,11 +60,11 @@ def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
     # 個人事業税 (所得210万円超、業種により約5%)
     biz_tax = max(0, (income - 210) * 0.05) if income > 210 else 0
     
-    # 国民健康保険税
-    if ins_sel == "市区町村の国民健康保険":
-        health_tax = min(104, max(30, (income - 43) * 0.095))
-    else:
+    # 健康保険税の判定（選択肢が確実に反映されるように修正）
+    if ins_sel == "建設国民健康保険組合（定額）":
         health_tax = 53.0
+    else:
+        health_tax = min(104, max(30, (income - 43) * 0.095))
         
     # 国民年金 (夫婦2人分固定)
     pension = 41.0
@@ -126,5 +126,5 @@ st.table(comparison_df)
 
 st.info(f"💡 **現在のシミュレーションのポイント：**\n"
         f"- ご主人の所得 **{gross_income}万円** に対し、専従者給与（年間 **{deputy_annual}万円**）と小規模企業共済（年間 **{kyosai_annual}万円**）の合計 **{deputy_annual + kyosai_annual}万円** が所得から控除されています。\n"
-        f"- 健康保険に **{insurance_type}** を選択しているため、所得増による保険料の跳ね上がりが調整されています。\n"
-        f"- 返済（月{other_debt_monthly}万円×15ヶ月）を含めても、毎月の資金繰りがどうなるかスライダーを動かして試算できます。")
+        f"- 健康保険に **{insurance_type}** を選択しているため、保険料が正確に反映されています。\n"
+        f"- 返済を含めたトータルの資金繰りもリアルタイムで確認できます。")
