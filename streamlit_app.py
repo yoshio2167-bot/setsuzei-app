@@ -38,8 +38,10 @@ other_debt_annual = other_debt_monthly * 12
 
 # --- 計算ロジック ---
 def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
+    # 控除後の課税所得 (基礎控除43万 + 専従者給与 + 共済)
     taxable_income = max(0, income - 43 - dep_val - kyosai_val)
     
+    # 簡易所得税計算 (累進課税の目安)
     if taxable_income <= 195:
         income_tax = taxable_income * 0.05
     elif taxable_income <= 330:
@@ -52,19 +54,28 @@ def calculate_taxes(income, dep_val, kyosai_val, ins_sel):
         income_tax = taxable_income * 0.33 - 153.6
     income_tax = max(10, income_tax)
     
+    # 住民税 (課税所得の約10%)
     resident_tax = taxable_income * 0.10 + 5.0
+    
+    # 個人事業税 (所得210万円超、業種により約5%)
     biz_tax = max(0, (income - 210) * 0.05) if income > 210 else 0
     
+    # 国民健康保険税
     if ins_sel == "市区町村の国民健康保険":
         health_tax = min(104, max(30, (income - 43) * 0.095))
     else:
         health_tax = 53.0
         
+    # 国民年金 (夫婦2人分固定)
     pension = 41.0
+    
     total_out = income_tax + resident_tax + biz_tax + health_tax + pension
     return income_tax, resident_tax, biz_tax, health_tax, pension, total_out
 
+# 選択された条件での計算
 inc_tax, res_tax, biz_tax, health_tax, pension, total_tax_soc = calculate_taxes(gross_income, deputy_annual, kyosai_annual, insurance_type)
+
+# 比較用の「現状ベース（対策なし・市区町村国保・専従者なし・共済なし）」の計算
 base_inc_tax, base_res_tax, base_biz_tax, base_health_tax, base_pension, base_base_total = calculate_taxes(gross_income, 0, 0, "市区町村の国民健康保険")
 
 # --- 画面表示 ---
@@ -74,8 +85,7 @@ with col1:
     st.metric(
         label="💰 年間トータル負担（税金＋社保＋年金）",
         value=f"{total_tax_soc:.1f} 万円",
-        delta=f"{total_tax_soc - base_base_total:.1f} 万円 (対現状)",
-        delta_inverse=True
+        delta=f"{total_tax_soc - base_base_total:.1f} 万円 (対現状)"
     )
 
 with col2:
@@ -93,6 +103,7 @@ with col3:
 
 st.divider()
 
+# 詳細内訳比較テーブル
 st.subheader("📊 負担内訳の比較 (万円 / 年)")
 
 comparison_df = pd.DataFrame({
@@ -113,6 +124,7 @@ comparison_df = pd.DataFrame({
 
 st.table(comparison_df)
 
+# アドバイスセクション
 st.info(f"💡 **現在のシミュレーションのポイント：**\n"
         f"- ご主人の所得 **{gross_income}万円** に対し、専従者給与（年間 **{deputy_annual}万円**）と小規模企業共済（年間 **{kyosai_annual}万円**）の合計 **{deputy_annual + kyosai_annual}万円** が所得から控除されています。\n"
         f"- 健康保険に **{insurance_type}** を選択しているため、所得増による保険料の跳ね上がりが調整されています。\n"
